@@ -1,7 +1,5 @@
 # dmloop
 
-# dmloop
-
 
 ```shell
 mkdir build
