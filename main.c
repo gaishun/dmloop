@@ -10,6 +10,24 @@
 
 #define OUT_OF_MEMORY   3
 
+//DEBU_PRINTF
+void print_fie_info (struct fiemap * fie){
+    int i;
+    printf("fm_extent_count=%u\n",fie->fm_extent_count);
+    printf("fm_length=%llu\n",fie->fm_length);
+    printf("fm_mapped_extents=%u\n",fie->fm_mapped_extents);
+    printf("fm_flags=%u\n",fie->fm_flags);
+    printf("fm_start=%llu\n",fie->fm_start);
+    for (i=0;i<fie->fm_mapped_extents;i++){
+        printf("fie->fm_extents[%d].fe_flags=%u\n",i,fie->fm_extents[i].fe_flags);
+        printf("fie->fm_extents[%d].fe_logical=%llu\n",i,fie->fm_extents[i].fe_logical);
+        printf("fie->fm_extents[%d].fe_physical=%llu\n",i,fie->fm_extents[i].fe_physical);
+        printf("fie->fm_extents[%d].fe_length=%llu\n",i,fie->fm_extents[i].fe_length);
+    }
+
+}
+
+
 /***
  *
  * @param fie               saved metadata of file
@@ -23,13 +41,17 @@ int execute_cmd (struct fiemap * fie,char* source_device, char* target_device, c
     __u32 sector_size = atoi(_sector_size);
 
     /** 记录几组offset和length */
+    __u64 logical_offset[fie->fm_extent_count];
     __u64 disk_offset[fie->fm_extent_count];
     __u64 portion_length[fie->fm_extent_count];
     __u32 i;//index
     for(i=0;i<fie->fm_extent_count;i++){
+        logical_offset[i]=fie->fm_extents[i].fe_logical;
         disk_offset[i]=fie->fm_extents[i].fe_physical;
         portion_length[i]=fie->fm_extents[i].fe_length;
-        printf("%llu,%llu\n",disk_offset[i],portion_length[i]);
+#ifdef _DEBUG
+        printf("%llu %llu,%llu\n",logical_offset[i],disk_offset[i],portion_length[i]);
+#endif
     }
 
 
@@ -42,25 +64,35 @@ int execute_cmd (struct fiemap * fie,char* source_device, char* target_device, c
     }
     memset(cmd,0,sizeof(char)*50);
     char temp[100];
-
-    sprintf(cmd,"dmsetup create %s --table \"",target_device);
-    __u64 log_offset; /** source dev logical offset*/
-    for(i=0,log_offset=0;i<fie->fm_extent_count;i++){
-        //    sprintf(temp,"%llu %llu %s %s %llu\n",logical_start,length,tardev_type,dev,source_start);
-        sprintf(temp," %llu %llu linear %s %llu\n",log_offset/sector_size,portion_length[i]/sector_size,
+    memset(temp,0,sizeof(temp));
+    sprintf(cmd,"dmsetup create %s --readonly --table \"",target_device);
+    /** source dev logical offset*/
+    __u64 cur_offset;
+    for(i=0,cur_offset=0;i<fie->fm_extent_count;i++){
+        /** if the logical offset is un-sequential, fill it with zero-dev */
+        if(cur_offset != logical_offset[i]){
+            sprintf(temp," %llu %llu linear /dev/mapper/zero 0\n",cur_offset/sector_size,logical_offset[i]/sector_size);
+            cur_offset = logical_offset[i];
+            if((cmd = (char*)realloc(cmd, strlen(cmd)+sizeof(char)* strlen(temp)))==NULL){
+                fprintf(stderr,"Out of Memory in realloc space for cmd");
+                return OUT_OF_MEMORY;
+            }
+            strcat(cmd,temp);
+        }
+        sprintf(temp," %llu %llu linear %s %llu\n",cur_offset/sector_size,portion_length[i]/sector_size,
                 source_device,disk_offset[i]/sector_size);
-        log_offset+=portion_length[i];
-//        printf("%s\n",temp);
+        cur_offset+=portion_length[i];
 
         if((cmd = (char*)realloc(cmd, strlen(cmd)+sizeof(char)* strlen(temp)))==NULL){
             fprintf(stderr,"Out of Memory in realloc space for cmd");
             return OUT_OF_MEMORY;
         }
         strcat(cmd,temp);
-//        printf("%s\n",cmd);
     }
     strcat(cmd,"\"");
+#ifdef _DEBUG
     printf("%s\n",cmd);
+#endif
     system(cmd);
     return 0;
 
@@ -121,14 +153,14 @@ int dmloop (char* file_path,char* source_device, char* target_device, char* sect
         fprintf(stderr, "fiemap ioctl() failed2 \n");
         return 4;
     }
-//    __u64 file_size = lseek(input_fd,0,SEEK_END);
-//    printf("file_size is %lluB\n",file_size);
-    close(input_fd);
 
+    close(input_fd);
+#ifdef  _DEBUG
+    print_fie_info(fie);
+#endif
     int ret = execute_cmd(fie,source_device,target_device,sector_size);
     free(fie);
     return ret;
-
 }
 
 
