@@ -9,6 +9,7 @@ option(_DEBUG "if debug" ON)
 if(_DEBUG)
     add_compile_options(-D_DEBUG)
     message("_DEBUG ON")
+
 endif()
 
 add_executable(dmloop main.c)

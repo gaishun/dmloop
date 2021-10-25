@@ -128,7 +128,7 @@ int dmloop (char* file_path,char* source_device, char* target_device, char* sect
     memset(fie,0,sizeof(struct fiemap));
     /** excepted length of this file,
      * could be replaced by file_size in bytes,
-     * but it also could be the max value*/
+     * but it also could be the max value**/
     fie->fm_length  = ~0;
 
     /** get the mapped extents*/
