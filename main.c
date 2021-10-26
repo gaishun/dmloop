@@ -71,7 +71,7 @@ int execute_cmd (struct fiemap * fie,char* source_device, char* target_device, c
     for(i=0,cur_offset=0;i<fie->fm_extent_count;i++){
         /** if the logical offset is un-sequential, fill it with zero-dev */
         if(cur_offset != logical_offset[i]){
-            sprintf(temp," %llu %llu linear /dev/mapper/zero 0\n",cur_offset/sector_size,logical_offset[i]/sector_size);
+            sprintf(temp," %llu %llu linear /dev/mapper/zero 0\n",cur_offset/sector_size,(logical_offset[i]-cur_offset)/sector_size);
             cur_offset = logical_offset[i];
             if((cmd = (char*)realloc(cmd, strlen(cmd)+sizeof(char)* strlen(temp)))==NULL){
                 fprintf(stderr,"Out of Memory in realloc space for cmd");
