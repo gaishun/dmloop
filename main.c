@@ -37,6 +37,8 @@ void print_fie_info (struct fiemap * fie){
  * @return
  */
 int execute_cmd (struct fiemap * fie,char* source_device, char* target_device, char* _sector_size){
+    char ZERO_DEVICE[20]="/dev/mapper/zero";
+
     /**transfer char* to int*/
     __u32 sector_size = atoi(_sector_size);
 
@@ -44,11 +46,13 @@ int execute_cmd (struct fiemap * fie,char* source_device, char* target_device, c
     __u64 logical_offset[fie->fm_extent_count];
     __u64 disk_offset[fie->fm_extent_count];
     __u64 portion_length[fie->fm_extent_count];
+    __u32 fe_flags[fie->fm_extent_count];
     __u32 i;//index
     for(i=0;i<fie->fm_extent_count;i++){
         logical_offset[i]=fie->fm_extents[i].fe_logical;
         disk_offset[i]=fie->fm_extents[i].fe_physical;
         portion_length[i]=fie->fm_extents[i].fe_length;
+        fe_flags[i]=fie->fm_extents[i].fe_flags;
 #ifdef _DEBUG
         printf("%llu %llu,%llu\n",logical_offset[i],disk_offset[i],portion_length[i]);
 #endif
@@ -68,32 +72,48 @@ int execute_cmd (struct fiemap * fie,char* source_device, char* target_device, c
     sprintf(cmd,"dmsetup create %s --readonly --table \"",target_device);
     /** source dev logical offset*/
     __u64 cur_offset;
-    for(i=0,cur_offset=0;i<fie->fm_extent_count;i++){
+    for(i=0,cur_offset=0;i<fie->fm_extent_count;i++) {
         /** if the logical offset is un-sequential, fill it with zero-dev */
-        if(cur_offset != logical_offset[i]){
-            sprintf(temp," %llu %llu linear /dev/mapper/zero 0\n",cur_offset/sector_size,(logical_offset[i]-cur_offset)/sector_size);
+        if (cur_offset != logical_offset[i]) {
+            sprintf(temp, " %llu %llu linear %s 0\n", cur_offset / sector_size,
+                    (logical_offset[i] - cur_offset) / sector_size,ZERO_DEVICE);
             cur_offset = logical_offset[i];
-            if((cmd = (char*)realloc(cmd, strlen(cmd)+sizeof(char)* strlen(temp)))==NULL){
-                fprintf(stderr,"Out of Memory in realloc space for cmd");
+            if ((cmd = (char *) realloc(cmd, strlen(cmd) + sizeof(char) * strlen(temp))) == NULL) {
+                fprintf(stderr, "Out of Memory in realloc space for cmd");
                 return OUT_OF_MEMORY;
             }
-            strcat(cmd,temp);
+            strcat(cmd, temp);
         }
-        sprintf(temp," %llu %llu linear %s %llu\n",cur_offset/sector_size,portion_length[i]/sector_size,
-                source_device,disk_offset[i]/sector_size);
-        cur_offset+=portion_length[i];
 
-        if((cmd = (char*)realloc(cmd, strlen(cmd)+sizeof(char)* strlen(temp)))==NULL){
-            fprintf(stderr,"Out of Memory in realloc space for cmd");
-            return OUT_OF_MEMORY;
+        //pre-allocate but unwritten
+        if (fe_flags[i] & FIEMAP_EXTENT_UNWRITTEN) {
+            sprintf(temp, " %llu %llu linear %s %llu\n", cur_offset / sector_size, portion_length[i] / sector_size,
+                    ZERO_DEVICE,disk_offset[i] / sector_size);
+            cur_offset += portion_length[i];
+            if ((cmd = (char *) realloc(cmd, strlen(cmd) + sizeof(char) * strlen(temp))) == NULL) {
+                fprintf(stderr, "Out of Memory in realloc space for cmd");
+                return OUT_OF_MEMORY;
+            }
+            strcat(cmd, temp);
+        } else {
+            sprintf(temp, " %llu %llu linear %s %llu\n", cur_offset / sector_size, portion_length[i] / sector_size,
+                    source_device, disk_offset[i] / sector_size);
+            cur_offset += portion_length[i];
+
+            if ((cmd = (char *) realloc(cmd, strlen(cmd) + sizeof(char) * strlen(temp))) == NULL) {
+                fprintf(stderr, "Out of Memory in realloc space for cmd");
+                return OUT_OF_MEMORY;
+            }
+            strcat(cmd, temp);
         }
-        strcat(cmd,temp);
     }
     strcat(cmd,"\"");
 #ifdef _DEBUG
     printf("%s\n",cmd);
 #endif
+    #ifdef _EXEC
     system(cmd);
+    #endif //_EXEC
     return 0;
 
 }
