@@ -13,10 +13,13 @@ need to cover the real device by a dm-device-layer, and mkfs on the dm-device-la
 while get the true file-mapped on the real device.
 
 ```shell
-dmsetup create DM_DEVICE_LAYER_NAME --table "0 `blockdev --getsz /dev/REAL_DEVICE_NAME` linear /devREAL_DEVICE_NAME 0"
-mkfs.ext4 /dev/mapper/DM_DEVICE_LAYER_NAME
+DM_DEVICE_LAYER_NAME="n1p11"
+REAL_DEVICE_NAME="/dev/nvme0n1p11"
+
+dmsetup create $DM_DEVICE_LAYER_NAME --table "0 `blockdev --getsz /dev/$REAL_DEVICE_NAME` linear /dev/$REAL_DEVICE_NAME 0"
+mkfs.ext4 /dev/mapper/$DM_DEVICE_LAYER_NAME
 mkdir /mnt/test/
-mount /dev/mapper/DM_DEVICE_LAYER_NAME /mnt/test
+mount /dev/mapper/$DM_DEVICE_LAYER_NAME /mnt/test
 ```
 
 ##  execute
